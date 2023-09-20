@@ -1,0 +1,146 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: games
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: rolebinding-default-privileged-sa-ns_games
+  namespace: games
+roleRef:
+  kind: ClusterRole
+  name: psp:vmware-system-privileged
+  apiGroup: rbac.authorization.k8s.io
+subjects:
+- kind: Group
+  apiGroup: rbac.authorization.k8s.io
+  name: system:serviceaccounts
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: game-controller-service-account
+  namespace: games
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: role-game-controller
+rules:
+- apiGroups: ["retro.sparkfabrik.com"]
+  resources: ["games", "games/status"]
+  verbs: ["*"]
+- apiGroups: ["",]
+  resources: ["configmaps", "events", "services"]
+  verbs: ["*"]
+- apiGroups: ["apps"]
+  resources: ["deployments"]
+  verbs: ["*"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: role-game-controller-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: role-game-controller
+subjects:
+  - kind: ServiceAccount
+    name: game-controller-service-account
+    namespace: games
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  # name must match the spec fields below, and be in the form: <plural>.<group>
+  name: games.retro.sparkfabrik.com
+spec:
+  # group name to use for REST API: /apis/<group>/<version>
+  group: retro.sparkfabrik.com
+  # list of versions supported by this CustomResourceDefinition
+  versions:
+    - name: v1
+      # Each version can be enabled/disabled by Served flag.
+      served: true
+      # One and only one version must be marked as the storage version.
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                name:
+                  type: string
+                zipUrl:
+                  type: string
+                dir:
+                  type: string
+                exe:
+                  type: string
+              required:
+              - name
+              - zipUrl
+              - dir
+              - exe
+            status:
+             type: object
+             description: GameStatus defines the observed state of Game
+             properties:
+              gameState:
+                type: string
+      subresources:
+        status: {}
+      # The columns we see in the kubectl output.
+      additionalPrinterColumns:
+      - name: Game name
+        type: string
+        description: The game name
+        jsonPath: .spec.name
+      - name: GSURL
+        type: string
+        description: The zip url of this game
+        jsonPath: .spec.zipUrl
+      - name: status
+        type: string
+        description: The game status
+        jsonPath: .status.gameState
+      - name: age
+        type: date
+        description: Age
+        jsonPath: .metadata.creationTimestamp
+  scope: Namespaced
+  names:
+    plural: games
+    singular: game
+    kind: Game
+    shortNames:
+    - gm
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: game-controller
+  name: game-controller
+  namespace: games
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: game-controller
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: game-controller
+    spec:
+      serviceAccount: game-controller-service-account
+      containers:
+      - image: ghcr.io/paolomainardi/additronk8s-game-controller
+        name: additronk8s-game-controller
+

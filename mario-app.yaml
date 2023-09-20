@@ -1,0 +1,11 @@
+---
+apiVersion: retro.sparkfabrik.com/v1
+kind: Game
+metadata:
+  name: mario
+  namespace: games
+spec:
+  name: "Mario"
+  zipUrl: "http://192.168.30.29/dosgames/mario.zip"
+  dir: "."
+  exe: "MARIO.EXE"
